@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -20,8 +21,20 @@ import (
 	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 )
 
+type publisher interface {
+	Publish(ctx context.Context, req *pubsubpb.PublishRequest) (*pubsubpb.PublishResponse, error)
+}
+
+type defaultPublisher struct {
+	client *pubsub.PublisherClient
+}
+
+func (p defaultPublisher) Publish(ctx context.Context, req *pubsubpb.PublishRequest) (*pubsubpb.PublishResponse, error) {
+	return p.client.Publish(ctx, req)
+}
+
 const (
-	scannerMaxBytes = 1 * 1024 * 1024  // 1 MB per line
+	scannerMaxBytes = 8 * 1024 * 1024  // 8 MB per line
 	publishTimeout  = 30 * time.Second // per message
 	listenHost      = "127.0.0.1"      // localhost only
 	scanBufCap      = 64 * 1024        // initial scanner buffer capacity
@@ -82,7 +95,9 @@ func run() error {
 	}()
 
 	addr := net.JoinHostPort(listenHost, strconv.Itoa(*port))
-	ln, err := net.Listen("tcp", addr)
+	publisher := defaultPublisher{client: pubClient}
+
+  ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen error: %w", err)
 	}
@@ -112,7 +127,7 @@ func run() error {
 		wg.Add(1)
 		go func(c net.Conn) {
 			defer wg.Done()
-			handleConn(ctx, c, pubClient, *topic, outLogger, errLogger)
+			handleConn(ctx, c, publisher, *topic, outLogger, errLogger)
 		}(conn)
 	}
 
@@ -135,7 +150,7 @@ func isFullTopicName(topic string) bool {
 func handleConn(
 	ctx context.Context,
 	conn net.Conn,
-	pubClient *pubsub.PublisherClient,
+	pubClient publisher,
 	topic string,
 	outLogger *log.Logger,
 	errLogger *log.Logger,
@@ -151,7 +166,7 @@ func handleConn(
 
 	for sc.Scan() {
 		// Scanner's buffer is reused; copy before publishing.
-		line := append([]byte(nil), sc.Bytes()...)
+		line := bytes.Clone(sc.Bytes())
 
 		// Keep behavior similar to the original syslog server: print to stdout.
 		outLogger.Println(string(line))
@@ -171,7 +186,7 @@ func handleConn(
 	}
 }
 
-func publishLine(ctx context.Context, c *pubsub.PublisherClient, topic string, data []byte) error {
+func publishLine(ctx context.Context, c publisher, topic string, data []byte) error {
 	pubCtx, cancel := context.WithTimeout(ctx, publishTimeout)
 	defer cancel()
 
