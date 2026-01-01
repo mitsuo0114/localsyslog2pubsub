@@ -19,6 +19,18 @@ import (
 	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 )
 
+type publisher interface {
+	Publish(ctx context.Context, req *pubsubpb.PublishRequest) (*pubsubpb.PublishResponse, error)
+}
+
+type defaultPublisher struct {
+	client *pubsub.PublisherClient
+}
+
+func (p defaultPublisher) Publish(ctx context.Context, req *pubsubpb.PublishRequest) (*pubsubpb.PublishResponse, error) {
+	return p.client.Publish(ctx, req)
+}
+
 const (
 	scannerMaxBytes = 1 * 1024 * 1024  // 1 MB per line
 	publishTimeout  = 30 * time.Second // per message
@@ -76,6 +88,8 @@ func run() error {
 	}
 	defer pubClient.Close()
 
+	publisher := defaultPublisher{client: pubClient}
+
 	addr := fmt.Sprintf("%s:%d", listenHost, *port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -107,7 +121,7 @@ func run() error {
 		wg.Add(1)
 		go func(c net.Conn) {
 			defer wg.Done()
-			handleConn(ctx, c, pubClient, *topic, outLogger, errLogger)
+			handleConn(ctx, c, publisher, *topic, outLogger, errLogger)
 		}(conn)
 	}
 
@@ -123,7 +137,7 @@ func isFullTopicName(topic string) bool {
 func handleConn(
 	ctx context.Context,
 	conn net.Conn,
-	pubClient *pubsub.PublisherClient,
+	pubClient publisher,
 	topic string,
 	outLogger *log.Logger,
 	errLogger *log.Logger,
@@ -159,7 +173,7 @@ func handleConn(
 	}
 }
 
-func publishLine(ctx context.Context, c *pubsub.PublisherClient, topic string, data []byte) error {
+func publishLine(ctx context.Context, c publisher, topic string, data []byte) error {
 	pubCtx, cancel := context.WithTimeout(ctx, publishTimeout)
 	defer cancel()
 
