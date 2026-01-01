@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -32,7 +33,7 @@ func (p defaultPublisher) Publish(ctx context.Context, req *pubsubpb.PublishRequ
 }
 
 const (
-	scannerMaxBytes = 1 * 1024 * 1024  // 1 MB per line
+	scannerMaxBytes = 8 * 1024 * 1024  // 8 MB per line
 	publishTimeout  = 30 * time.Second // per message
 	listenHost      = "127.0.0.1"      // localhost only
 	scanBufCap      = 64 * 1024        // initial scanner buffer capacity
@@ -153,7 +154,7 @@ func handleConn(
 
 	for sc.Scan() {
 		// Scanner's buffer is reused; copy before publishing.
-		line := append([]byte(nil), sc.Bytes()...)
+		line := bytes.Clone(sc.Bytes())
 
 		// Keep behavior similar to the original syslog server: print to stdout.
 		outLogger.Println(string(line))
