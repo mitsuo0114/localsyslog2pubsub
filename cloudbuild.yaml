@@ -1,0 +1,80 @@
+# cloudbuild.yaml
+
+substitutions:
+  _APP_NAME: "localsyslog2pubsub"
+  _MAIN_PKG: "."
+  _BUCKET_NAME: "YOUR_GCS_BUCKET"
+
+options:
+  volumes:
+    - name: "go-mod-cache"
+      path: "/go/pkg/mod"
+    - name: "go-build-cache"
+      path: "/root/.cache/go-build"
+
+steps:
+  # 1) linux / 386 (x86)
+  - id: "build-linux-386"
+    name: "golang:1.25"
+    entrypoint: "/bin/bash"
+    env:
+      - "CGO_ENABLED=0"
+      - "GOOS=linux"
+      - "GOARCH=386"
+    args:
+      - "-c"
+      - |
+        set -euxo pipefail
+        mkdir -p dist
+        go build -trimpath -ldflags="-s -w" -o "dist/${_APP_NAME}_linux_386" "${_MAIN_PKG}"
+
+  # 2) linux / amd64 (x64)
+  - id: "build-linux-amd64"
+    name: "golang:1.25"
+    entrypoint: "/bin/bash"
+    env:
+      - "CGO_ENABLED=0"
+      - "GOOS=linux"
+      - "GOARCH=amd64"
+    args:
+      - "-c"
+      - |
+        set -euxo pipefail
+        mkdir -p dist
+        go build -trimpath -ldflags="-s -w" -o "dist/${_APP_NAME}_linux_amd64" "${_MAIN_PKG}"
+
+  # 3) windows / 386 (x86)
+  - id: "build-windows-386"
+    name: "golang:1.25"
+    entrypoint: "/bin/bash"
+    env:
+      - "CGO_ENABLED=0"
+      - "GOOS=windows"
+      - "GOARCH=386"
+    args:
+      - "-c"
+      - |
+        set -euxo pipefail
+        mkdir -p dist
+        go build -trimpath -ldflags="-s -w" -o "dist/${_APP_NAME}_windows_386.exe" "${_MAIN_PKG}"
+
+  # 4) windows / amd64 (x64)
+  - id: "build-windows-amd64"
+    name: "golang:1.25"
+    entrypoint: "/bin/bash"
+    env:
+      - "CGO_ENABLED=0"
+      - "GOOS=windows"
+      - "GOARCH=amd64"
+    args:
+      - "-c"
+      - |
+        set -euxo pipefail
+        mkdir -p dist
+        go build -trimpath -ldflags="-s -w" -o "dist/${_APP_NAME}_windows_amd64.exe" "${_MAIN_PKG}"
+
+artifacts:
+  objects:
+    location: "gs://$_BUCKET_NAME/builds/$BUILD_ID/"
+    paths:
+      - "dist/*"
