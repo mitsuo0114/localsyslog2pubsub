@@ -13,6 +13,18 @@ options:
       path: "/root/.cache/go-build"
 
 steps:
+  # Run tests before building
+  - id: "test"
+    name: "golang:1.25"
+    entrypoint: "/bin/bash"
+    env:
+      - "CGO_ENABLED=0"
+    args:
+      - "-c"
+      - |
+        set -euxo pipefail
+        go test ./...
+
   # 1) linux / 386 (x86)
   - id: "build-linux-386"
     name: "golang:1.25"
