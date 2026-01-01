@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -87,12 +88,16 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("NewPublisherRESTClient: %w", err)
 	}
-	defer pubClient.Close()
+	defer func() {
+		if err := pubClient.Close(); err != nil {
+			errLogger.Printf("publisher close error: %v", err)
+		}
+	}()
 
+	addr := net.JoinHostPort(listenHost, strconv.Itoa(*port))
 	publisher := defaultPublisher{client: pubClient}
 
-	addr := fmt.Sprintf("%s:%d", listenHost, *port)
-	ln, err := net.Listen("tcp", addr)
+  ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen error: %w", err)
 	}
@@ -132,7 +137,14 @@ func run() error {
 }
 
 func isFullTopicName(topic string) bool {
-	return strings.HasPrefix(topic, "projects/") && strings.Contains(topic, "/topics/")
+	const prefix = "projects/"
+	const separator = "/topics/"
+	withoutPrefix, ok := strings.CutPrefix(topic, prefix)
+	if !ok {
+		return false
+	}
+	projectID, topicPart, ok := strings.Cut(withoutPrefix, separator)
+	return ok && projectID != "" && topicPart != "" && !strings.Contains(topicPart, "/")
 }
 
 func handleConn(
