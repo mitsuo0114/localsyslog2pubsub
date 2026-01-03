@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	pubsub "cloud.google.com/go/pubsub/apiv1"
+	pubsub "cloud.google.com/go/pubsub/v2/apiv1"
 	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 )
 
@@ -26,7 +26,7 @@ type publisher interface {
 }
 
 type defaultPublisher struct {
-	client *pubsub.PublisherClient
+	client *pubsub.TopicAdminClient
 }
 
 func (p defaultPublisher) Publish(ctx context.Context, req *pubsubpb.PublishRequest) (*pubsubpb.PublishResponse, error) {
@@ -84,9 +84,9 @@ func run() error {
 	defer cancel()
 
 	// Create Pub/Sub REST publisher client
-	pubClient, err := pubsub.NewPublisherRESTClient(ctx)
+	pubClient, err := pubsub.NewTopicAdminRESTClient(ctx)
 	if err != nil {
-		return fmt.Errorf("NewPublisherRESTClient: %w", err)
+		return fmt.Errorf("NewTopicAdminRESTClient: %w", err)
 	}
 	defer func() {
 		if err := pubClient.Close(); err != nil {
@@ -97,7 +97,7 @@ func run() error {
 	addr := net.JoinHostPort(listenHost, strconv.Itoa(*port))
 	publisher := defaultPublisher{client: pubClient}
 
-  ln, err := net.Listen("tcp", addr)
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen error: %w", err)
 	}
